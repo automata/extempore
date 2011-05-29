@@ -80,13 +80,20 @@ namespace extemp {
 	static pointer openDynamicLib(scheme* _sc, pointer args);
 	static pointer closeDynamicLib(scheme* _sc, pointer args);		
 	static pointer pointerSize(scheme* _sc, pointer args);
+	static pointer platform(scheme* _sc, pointer args);
 	static pointer makeCptr(scheme* _sc, pointer args);
+	static pointer dirlist(scheme* _sc, pointer args);
 	// dsp bits
 	static pointer setDSPClosure(scheme* _sc, pointer args);
 	static pointer setDSPWrapper(scheme* _sc, pointer args);
 	static pointer setDSPWrapperArray(scheme* _sc, pointer args);
 		
 	// misc stuff
+	static pointer dataGETi64(scheme* _sc, pointer args);
+	static pointer dataGETdouble(scheme* _sc, pointer args);	
+	static pointer dataSETi64(scheme* _sc, pointer args);
+	static pointer dataSETdouble(scheme* _sc, pointer args);
+	static pointer cptrToString(scheme* _sc, pointer args);
 	static pointer stringStrip(scheme* _sc, pointer args);
 	static pointer stringJoin(scheme* _sc, pointer args);
 	static pointer getClosureEnv(scheme* _sc, pointer args);
@@ -138,9 +145,18 @@ namespace extemp {
 	static pointer printLLVMModule(scheme* _sc, pointer args);
 	static pointer printLLVMFunction(scheme* _sc, pointer args);
 	static pointer bind_symbol(scheme* _sc, pointer args);
+	static pointer get_named_type(scheme* _sc, pointer args);
 	static pointer impcirGetName(scheme* _sc, pointer args);	
 	static pointer impcirGetType(scheme* _sc, pointer args);	
 	static pointer impcirAdd(scheme* _sc, pointer args);
+
+#if defined (TARGET_OS_LINUX)
+	// some XWindows guff
+	static pointer getX11Event(scheme* _sc, pointer args);
+	static pointer makeGLXContext(scheme* _sc, pointer args);
+	static pointer glxSwapBuffers(scheme* _sc, pointer args);
+	static pointer glxMakeContextCurrent(scheme* _sc, pointer args);
+#endif
 
     private:
 	static SchemeFFI SINGLETON;		

@@ -15,27 +15,64 @@
 (defvar extempore-port 7099)             ; TCP port to Extempore
 (defvar extempore-process nil)           ; process during TCP connection
 
+(defun smart-tab ()
+  "This smart tab is minibuffer compliant: it acts as usual in
+    the minibuffer. Else, if mark is active, indents region. Else if
+    point is at the end of a symbol, expands it. Else indents the
+    current line."
+  (interactive)
+  (if (minibufferp)
+      (unless (minibuffer-complete)
+	(dabbrev-expand nil))
+    (if mark-active
+	(indent-region (region-beginning)
+		       (region-end))
+	(if (looking-at "\\_>")
+	    (dabbrev-expand nil)
+	  (indent-for-tab-command)))))
+
+;(global-set-key (kbd "TAB") 'smart-tab)
+(define-key scheme-mode-map (kbd "TAB") 'smart-tab); # only in scheme-mode
+
+(define-key scheme-mode-map (kbd "RET") 'newline-and-indent)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; add some stuff to scheme mode
+
 (font-lock-add-keywords 'scheme-mode
   '(("definec" . font-lock-keyword-face)
     ("definec:dsp" . font-lock-keyword-face)
     ("define-instrument" . font-lock-keyword-face)
     ("bind-scm" . font-lock-keyword-face)
-    ("bind-lib" . font-lock-keyword-face)))  
+    ("bind-type" . font-lock-keyword-face)
+    ("dotimes" . font-lock-keyword-face)
+    ("bind-lib" . font-lock-keyword-face)))
+
+(put 'dotimes 'scheme-indent-function 1)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; handle extempore minor mode stuff
 
 (define-minor-mode extempore-mode 
    "Toggle the mode for interacting with Scheme in Extempore over TCP"
    :init-value nil :lighter " Extempore" :keymap scheme-mode-map
-   (if extempore-mode (extempore-go) (extempore-stop)))
+   (if extempore-mode (extempore-connect "localhost" 7099) (extempore-stop)))
 
-(defun extempore-go ()                   ; start connection to Extempore
+(defun extempore-connect (host port)     ; start connection to Extempore
+  (interactive "sHostname: \nnPort: ")
   (define-key scheme-mode-map extempore-keydef 'extempore-send-definition)
   (define-key scheme-mode-map extempore-keyreg 'extempore-send-region)
+  (if (not (null extempore-process))
+      (delete-process extempore-process))
   (setq extempore-process
-	(open-network-stream "extempore" nil "localhost" extempore-port))
+	(open-network-stream "extempore" nil
+			     (if (null host) "localhost" host)
+			     (if (null port) 7099 port)))
   (set-process-filter extempore-process 
 	'(lambda (proc str) (message (substring str 0 -1)))))
 
 (defun extempore-stop ()                 ; terminate connection to Extempore
+  (interactive)
   (delete-process extempore-process)
   (setq extempore-process nil))
 

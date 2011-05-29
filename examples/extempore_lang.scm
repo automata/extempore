@@ -216,6 +216,21 @@
 ;; function definitions.
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; Closures can be recursive
+;;
+
+(definec my-test-4
+  (lambda (a)
+    (if (< a 1)
+	(printf "done\n")
+	(begin (printf "a: %lld\n" a)
+	       (my-test-4 (- a 1))))))
+
+(my-test-4 7)
+    
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; a simple tuple example
 ;; 
@@ -238,7 +253,7 @@
 ;; (i.e. i64 being tuple index 0)
 (definec my-test-7 
   (lambda ()
-    (let ((a (make-tuple i64 float)) ; type <i64,float>
+    (let ((a (make-tuple i64 float)) ; returns pointer to type <i64,float>
 	  (b 37)
 	  (c 6.4))
       (tuple-set! a 0 b) ;; set i64 to 64
@@ -255,7 +270,7 @@
 ;; this function returns void
 (definec my-test-8
    (lambda ()
-      (let ((v (make-array 5 float)))
+      (let ((v (make-array 5 float))) ; returns pointer to type |5,float|
          (dotimes (i 5)
             ;; random returns double so "truncate" to float
             ;; which is what v expects
@@ -268,19 +283,43 @@
 (my-test-8)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; some crazy array code with closures
-;; try to figure out what this does
+;; some crazy array code with
+;; closures and arrays
+;; try to figure out what this all does
+;;
+;; this example uses the array type
+;; the pretty print for this type is
+;; |num,type| num elements of type
+;; |5,i64| is an array of 5 x i64
+;;
+;; An array is not a pointer type
+;; i.e. |5,i64| cannot be bitcast to i64*
+;;
+;; However an array can be a pointer
+;; i.e. |5,i64|* can be bitcast to i64*
+;; i.e. |5,i64|** to i64** etc..
+;;
+;; make-array returns a pointer to an array
+;; i.e. (make-array 5 i64) returns type |5,i64|*
+;;
+;; aref (array-ref) and aset! (array-set!)
+;; can operate with either pointers to arrays or
+;; standard pointers.
+;;
+;; in other words aref and aset! are happy
+;; to work with either i64* or |5,i64|*
 
-(definec my-test-9 
-   (lambda (v:i64*)
+(definec my-test-9
+   (lambda (v:|5,i64|*)
       (let ((f (lambda (x)
                   (* (array-ref v 2) x))))
          f)))
 
-(definec my-test-10 
-   (lambda (v:[i64,i64]**)
-      (let ((ff (aref v 0))) ; aref alias for array-ref
-         (ff 5))))
+(definec my-test-10
+  (lambda (v:|5,[i64,i64]*|*)
+    (let ((ff (aref v 0))) ; aref alias for array-ref
+      (ff 5))))
+
 
 (definec my-test-11
    (lambda ()
@@ -325,19 +364,20 @@
 ;; for signal processing and alike
 
 (definec envelope-segments
-   (lambda (points:double* num-of-points:i64)
-      (let ((lines (make-array num-of-points [double,double]*)))         
-         (dotimes (k num-of-points)
-             (let* ((idx (* k 2))
-                    (x1 (aref points (+ idx 0)))
-                    (y1 (aref points (+ idx 1)))
-                    (x2 (aref points (+ idx 2)))
-                    (y2 (aref points (+ idx 3)))
-                    (m (if (= 0.0 (- x2 x1)) 0.0 (/ (- y2 y1) (- x2 x1))))
-                    (c (- y2 (* m x2)))
-                    (l (lambda (time) (+ (* m time) c))))
-                (aset! lines k l)))
-         lines)))
+  (lambda (points:double* num-of-points:i64)
+    (let ((lines (heap-alloc num-of-points [double,double]*)))
+      (dotimes (k num-of-points)
+	(let* ((idx (* k 2))
+	       (x1 (aref points (+ idx 0)))
+	       (y1 (aref points (+ idx 1)))
+	       (x2 (aref points (+ idx 2)))
+	       (y2 (aref points (+ idx 3)))
+	       (m (if (= 0.0 (- x2 x1)) 0.0 (/ (- y2 y1) (- x2 x1))))
+	       (c (- y2 (* m x2)))
+	       (l (lambda (time) (+ (* m time) c))))
+	  (aset! lines k l)))
+      lines)))
+
 
 (definec make-envelope
    (lambda (points:double* num-of-points)
@@ -353,10 +393,11 @@
                          (set! res (line time)))))
                res)))))
 
+
 ;; make a convenience wrapper 
 (definec env-wrap
    (let* ((points 3)
-          (data (make-array (* points 2) double)))
+          (data (heap-alloc (* points 2) double)))
       (aset! data 0 0.0) ;; point data
       (aset! data 1 0.0)      
       (aset! data 2 2.0)
@@ -372,7 +413,6 @@
 (println (env-wrap 2.0)) ;; time 2.0 should be 1.0
 (println (env-wrap 2.5)) ;; going back down 0.75
 (println (env-wrap 4.0)) ;; to zero
-
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -474,4 +514,135 @@
 
 (my-test19) ;; 5:5 > 25:25 > 125:125
 
-(print-notification 'done)
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; named types
+
+;; we can name our own types using bind-type
+(bind-type mytype <i64,i64>*)
+
+;; which we can then use in place
+(definec my-test20
+  (lambda (a:mytype)
+    (tref a 0)))
+
+;; named types support a single level of recursion
+;; this is very useful for building data structures
+;; linked lists for example!
+;; The '@' symbol in the type signature represents
+;; the recursive type
+;; In the example below the '@' stands in place of
+;; @ = <i64,@*> (i.e. it's recursive)
+(bind-type i64list <i64,i64list*>)
+
+(definec cons-i64
+  (lambda (a:i64 b:i64list*)
+    (let ((pair (make-tuple i64 i64list*)))
+      (tset! pair 0 a)
+      (tset! pair 1 b)
+      pair)))
+          
+(definec car-i64
+  (lambda (a:i64list*)
+    (tref a 0)))
+
+(definec cdr-i64
+  (lambda (a:i64list*)
+    (tref a 1)))
+
+;; print all i64's in list
+(definec my-test25
+  (lambda (a:i64list*)
+    (if (null? a)
+	(begin (printf "done\n") 1)
+	(begin (printf "%lld\n" (car-i64 a))
+	       (my-test25 (cdr-i64 a))))))
+
+;; build a list (using cons) and then call my-test25
+(definec my-test26
+  (lambda ()
+    (let ((my-list (cons-i64 1 (cons-i64 2 (cons-i64 3 null)))))
+      (my-test25 my-list))))
+
+(my-test26) ;; 1 > 2 > 3 > done
+
+
+;; it can sometimes be helpful to allocate
+;; a predefined tuple type on the stack
+;; you can do this using allocate
+(bind-type vec3 <double,double,double>)
+
+;; note that point is deallocated at the
+;; end of the function call.  You can
+;; stack allocate (stack-alloc) or
+;; heap allocate (heap-alloc)
+;; any valid type  (i64 for example)
+(definec my-test27
+  (lambda ()
+    (let ((point (stack-alloc vec3)))
+      (tset! point 0 0.0)
+      (tset! point 1 -1.0)
+      (tset! point 2 1.0)
+      1)))
+
+(my-test27) ;; 1
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; aref-ptr and tref-ptr
+;;
+
+;; aref-ptr and tref-ptr return a pointer to an element
+;; just as aref and tref return elements aref-ptr and
+;; tref-ptr return a pointer to those elements.
+
+;; This allows you to do things like create an array
+;; with an offset
+(definec my-test28
+  (lambda ()
+    (let ((arr (make-array 32 i64))
+	  (arroff (aref-ptr arr 16)))
+      ;; load arr
+      (dotimes (i 32) (aset! arr i i))
+      (dotimes (k 16)
+	(printf "index: %lld\tarr: %lld\tarroff: %lld\n"
+		k (aref arr k) (aref arroff k))))))
+      
+(my-test28) ;; print outs
+
+
+(print)
+(println 'finished)
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; arrays
+;; Extempore lang supports arrays as for first class
+;; aggregate types (in other words as distinct from
+;; a pointer).
+;;
+;; an array is made up of a size and a type
+;; |32,i64| is an array of 32 elements of type i64 
+;;
+
+(bind-type tuple-with-array <double,|32,|4,i32||,float>)
+
+(definec my-test296
+  (lambda ()
+    (let ((tup (stack-alloc tuple-with-array))
+	  (t2 (stack-alloc |32,i64|)))
+      (aset! t2 0 9)      
+      (tset! tup 2 5.5)
+      (aset! (aref-ptr (tref-ptr tup 1) 0) 0 0)
+      (aset! (aref-ptr (tref-ptr tup 1) 0) 1 1)
+      (aset! (aref-ptr (tref-ptr tup 1) 0) 2 2)
+      (printf "val: %lld %lld %f\n"
+	      (aref (aref-ptr (tref-ptr tup 1) 0) 1)
+	      (aref t2 0) (ftod (tref tup 2)))
+      (aref (aref-ptr (tref-ptr tup 1) 0) 1))))
+
+(my-test296) ;; val: 1 9 5.5

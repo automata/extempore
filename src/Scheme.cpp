@@ -58,6 +58,8 @@
 #include <iostream>
 #include <sstream>
 
+#include <pcre.h>
+#include "EXTLLVM.h"
 //#include "EXTMonitor"
 //#include "EXTThread"
 
@@ -850,6 +852,114 @@ static num num_div(num a, num b) {
 	
     return ret;
 }
+
+static num num_bitnot(num a) {
+  num ret;
+  ret.num_type = MY_ARR[a.num_type];
+	
+  switch(ret.num_type) {
+  case 0:
+    ret.value.ivalue= ~ (a.value.ivalue);	
+    break;
+  case 1:
+  case 3:
+    ret.num_type = 0;		
+    ret.value.ivalue= ~((int)a.value.ivalue);	
+  }
+	
+  return ret;
+}
+
+static num num_bitand(num a, num b) {
+  num ret;
+  int tot = a.num_type + b.num_type;
+  ret.num_type = MY_ARR[tot];
+	
+  switch(ret.num_type) {
+  case 0:
+    ret.value.ivalue= a.value.ivalue & b.value.ivalue;	
+    break;
+  case 1:
+  case 3:
+    ret.num_type = 0;		
+    ret.value.ivalue= (int)a.value.ivalue & (int)b.value.ivalue;	
+  }
+	
+  return ret;
+}
+
+static num num_bitor(num a, num b) {
+  num ret;
+  int tot = a.num_type + b.num_type;
+  ret.num_type = MY_ARR[tot];
+	
+  switch(ret.num_type) {
+  case 0:
+    ret.value.ivalue= a.value.ivalue | b.value.ivalue;	
+    break;
+  case 1:
+  case 3:
+    ret.num_type = 0;		
+    ret.value.ivalue= (int)a.value.ivalue | (int)b.value.ivalue;	
+  }
+	
+  return ret;
+}
+
+static num num_biteor(num a, num b) {
+  num ret;
+  int tot = a.num_type + b.num_type;
+  ret.num_type = MY_ARR[tot];
+	
+  switch(ret.num_type) {
+  case 0:
+    ret.value.ivalue= a.value.ivalue ^ b.value.ivalue;	
+    break;
+  case 1:
+  case 3:
+    ret.num_type = 0;		
+    ret.value.ivalue= (int)a.value.ivalue ^ (int)b.value.ivalue;	
+  }
+	
+  return ret;
+}
+
+static num num_bitlsl(num a, num b) {
+  num ret;
+  int tot = a.num_type + b.num_type;
+  ret.num_type = MY_ARR[tot];
+	
+  switch(ret.num_type) {
+  case 0:
+    ret.value.ivalue= a.value.ivalue << b.value.ivalue;	
+    break;
+  case 1:
+  case 3:
+    ret.num_type = 0;		
+    ret.value.ivalue= (int)a.value.ivalue << (int)b.value.ivalue;	
+  }
+	
+  return ret;
+}
+
+static num num_bitlsr(num a, num b) {
+  num ret;
+  int tot = a.num_type + b.num_type;
+  ret.num_type = MY_ARR[tot];
+	
+  switch(ret.num_type) {
+  case 0:
+    ret.value.ivalue= a.value.ivalue >> b.value.ivalue;	
+    break;
+  case 1:
+  case 3:
+    ret.num_type = 0;		
+    ret.value.ivalue= (int)a.value.ivalue >> (int)b.value.ivalue;	
+  }
+	
+  return ret;
+}
+
 
 static num num_intdiv(num a, num b) {
     num ret;
@@ -3595,7 +3705,11 @@ static pointer opexe_0(scheme *sc, enum scheme_opcodes op) {
 		s_return(sc,xx);
 		//s_return(sc,slot_value_in_env(x));
 	    } else {
+	      if(llvm_check_valid_dot_symbol(sc,symname(sc->code))) {
+		s_return(sc,sc->code);
+	      }else{
 		Error_1(sc,"eval: unbound variable:", sc->code, sc->code->_debugger->_size);
+	      }
 	    }
 	} else if (is_pair(sc->code)) {
 	    if (is_syntax(x = car(sc->code))) {     /* SYNTAX */
@@ -3707,7 +3821,13 @@ static pointer opexe_0(scheme *sc, enum scheme_opcodes op) {
 	    dump_stack_continuation_set(sc, cont_dump(sc->code));
 	    s_return(sc,sc->args != sc->NIL ? car(sc->args) : sc->NIL);
 	} else {
+	  if(llvm_check_valid_dot_symbol(sc, symname(sc->code))) {
+	    // all good so far so now we check llvm
+	    pointer ppp = llvm_scheme_env_set(sc, symname(sc->code));
+	    s_return(sc,ppp);
+	  }else{
 	    Error_0(sc,"illegal function",sc->code->_debugger->_size);
+	  }
 	}
 
     case OP_DOMACRO:    /* do macro */
@@ -4289,6 +4409,56 @@ static pointer opexe_2(scheme *sc, enum scheme_opcodes op) {
 	    }
 	}
 	s_return(sc,mk_number(sc, v));
+  case OP_BITNOT:        /* ~ */
+    v=num_bitnot(nvalue(car(sc->args)));
+    s_return(sc,mk_number(sc, v));
+
+  case OP_BITAND:        /* & */
+    v=num_zero;
+    x = sc->args;
+    if (x != sc->NIL) {
+      v = nvalue(car(x));
+      for (x = cdr(x); x != sc->NIL; x = cdr(x)) {
+	v=num_bitand(v,nvalue(car(x)));
+      }
+    }
+    s_return(sc,mk_number(sc, v));
+				
+  case OP_BITOR:        /* | */
+    v=num_zero;
+    for (x = sc->args; x != sc->NIL; x = cdr(x)) {
+      v=num_bitor(v,nvalue(car(x)));
+    }
+    s_return(sc,mk_number(sc, v));
+				
+  case OP_BITEOR:        /* ^ */
+    v=num_zero;
+    for (x = sc->args; x != sc->NIL; x = cdr(x)) {
+      v=num_biteor(v,nvalue(car(x)));
+    }
+    s_return(sc,mk_number(sc, v));
+				
+  case OP_BITLSL:        /* << */
+    v=num_zero;
+    x = sc->args;
+    if (x != sc->NIL) {
+      v = nvalue(car(x));
+      for (x = cdr(x); x != sc->NIL; x = cdr(x)) {
+	v=num_bitlsl(v,nvalue(car(x)));
+      }
+    }
+    s_return(sc,mk_number(sc, v));
+				
+  case OP_BITLSR:        /* >> */
+    v=num_zero;
+    x = sc->args;
+    if (x != sc->NIL) {
+      v = nvalue(car(x));
+      for (x = cdr(x); x != sc->NIL; x = cdr(x)) {
+	v=num_bitlsr(v,nvalue(car(x)));
+      }
+    }
+    s_return(sc,mk_number(sc, v));
 				
     case OP_INTDIV:        /* quotient */
 	if(cdr(sc->args)==sc->NIL) {
@@ -6033,13 +6203,11 @@ void scheme_load_file(scheme *sc, FILE *fin) {
     sc->func_called_by_extempore = sc->NIL;		
     sc->call_end_time = extemp::UNIV::TIME+(uint64_t)(extemp::UNIV::SAMPLERATE*60);	
 	
-    Eval_Cycle(sc, OP_T0LVL);	
-    // @try{
-    // 	Eval_Cycle(sc, OP_T0LVL);
-    // }@catch(NSException* e){
-    // 	NSLog(@"ERROR IN SCHEME LOAD FILE %@",e);
-    // 	CPPBridge::error([[e reason] UTF8String]);
-    // }
+    try{
+	Eval_Cycle(sc, OP_T0LVL); 
+    }catch(ScmRuntimeError err){
+	_Error_1(sc,err.msg,sc->NIL,0,0);
+    }
 	
     typeflag(sc->loadport)=T_ATOM;
     if(sc->retcode==0) {
@@ -6077,15 +6245,11 @@ void scheme_load_string(scheme *sc, const char *cmd, unsigned long long start_ti
     sc->call_start_time = start_time;
     sc->call_end_time = end_time;
 	
-    Eval_Cycle(sc, OP_T0LVL);	
-    // @try{
-    // 	Eval_Cycle(sc, OP_T0LVL);
-    // }@catch(NSException* e) {
-    // 	NSLog(@"ERROR IN SCHEME LOAD STRING %s\n%@",cmd,e);
-    // 	char emsg[256];
-    // 	sprintf(emsg,"ERR In Load String %s\n%s\n",[[e reason] UTF8String],cmd);
-    // 	CPPBridge::error(emsg);
-    // }
+    try{
+	Eval_Cycle(sc, OP_T0LVL); 
+    }catch(ScmRuntimeError err){
+	_Error_1(sc,err.msg,sc->NIL,0,0);
+    }
 	
     typeflag(sc->loadport)=T_ATOM;
     if(sc->retcode==0) {
@@ -6126,13 +6290,11 @@ void scheme_apply0(scheme *sc, const char *procname) {
     sc->interactive_repl=0;
     sc->retcode=0;
 	
-    Eval_Cycle(sc,OP_EVAL);	
-    // @try{
-    // 	Eval_Cycle(sc,OP_EVAL);
-    // }@catch(NSException* e){
-    // 	NSLog(@"ERROR IN SCHEME APPLY %@",e);				
-    // 	CPPBridge::error([[e reason] UTF8String]);
-    // }	
+    try{
+	Eval_Cycle(sc, OP_EVAL); 
+    }catch(ScmRuntimeError err){
+	_Error_1(sc,err.msg,sc->NIL,0,0);
+    }
 }
 
 void scheme_call_without_stack_reset(scheme *sc, pointer func, pointer args) 

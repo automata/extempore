@@ -427,6 +427,18 @@
 (macro (tanr args)
    `(+ ,(cadr args) (* ,(caddr args) (tan (* 2pi beat ,(cadddr args))))))
 
+(macro (play args)
+  (if (symbol? (cadr args))
+      (if (> (length args) 5)
+	  `(play-note (*metro* beat) ,(cadr args) ,(caddr args) ,(cadddr args) (*metro* 'dur ,(car (cddddr args)))
+		      ,(car (cdr (cddddr args))))
+	  `(play-note (*metro* beat) ,(cadr args) ,(caddr args) ,(cadddr args) (*metro* 'dur ,(car (cddddr args)))))
+      (if (> (length args) 6)
+	  `(play-note (*metro* (+ beat ,(cadr args))) ,(caddr args) ,(cadddr args) ,(car (cddddr args))
+		      (*metro* 'dur ,(car (cdr (cddddr args)))) ,(car (cddr (cddddr args))))
+	  `(play-note (*metro* (+ beat ,(cadr args))) ,(caddr args) ,(cadddr args) ,(car (cddddr args))
+		      (*metro* 'dur ,(car (cdr (cddddr args))))))))
+
 
 ; creates a rhythm of a given length
 ; a tactus is provided and a percentage of synconization (from 0 - 1)
@@ -1052,42 +1064,3 @@
 
 (define-macro (dsp:set! name)
   `(_dsp:set! ,(symbol->string name)))
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; this here for wrapping llvm dynamic binds
-(define-macro (bind-lib library symname type)
-  `(__dynamic-bind ,library ',symname ',type))
-
-(define __dynamic-bind
-  (lambda (library symname type)
-    (let* ((ctype (cdr (impc:ir:convert-from-pretty-types type)))
-           (ircode (string-append "declare "
-                                   (impc:ir:get-type-str (car ctype))
-                                   " @"
-                                   (symbol->string symname)
-                                   "("
-                                   (if (null? (cdr ctype))
-                                       ""
-                                       (apply string-append
-                                              (impc:ir:get-type-str (cadr ctype))
-                                              (map (lambda (v)
-                                                     (string-append "," (impc:ir:get-type-str v)))
-                                                   (cddr ctype))))
-                                   ")")))
-      (llvm:compile ircode)
-      (if (llvm:bind-symbol library (symbol->string symname))
-	  (begin (ascii-print-color 0 9 10)
-		 (print "Successfully bound ")
-		 (ascii-print-color 1 2 10)
-		 (print (symbol->string symname))
-		 (ascii-print-color 0 9 10)
-		 (print " >>> ")
-		 (ascii-print-color 1 3 10)
-		 (print type)
-		 (ascii-print-color 0 9 10)
-		 ;(print " from lib: " library)
-		 (print))
-	  (print-error 'Compiler 'Error: 'could 'not 'bind! symname)))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

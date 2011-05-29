@@ -48,6 +48,7 @@ declare void @llvm_zone_ptr_set_size(i8*, i64) nounwind
 declare i64 @llvm_zone_ptr_size(i8*) nounwind
 declare void @llvm_zone_copy_ptr(i8*, i8*) nounwind
 declare i8* @llvm_zone_malloc(%mzone*, i64) nounwind
+declare i8* @llvm_stack_alloc(i64) nounwind
 declare %clsvar* @get_address_table(i8*, %clsvar*) nounwind
 declare i32 @get_address_offset(i8*, %clsvar*) nounwind
 declare i1 @check_address_type(i8*, %clsvar*, i8*) nounwind
@@ -59,6 +60,7 @@ declare void @llvm_print_i64(i64)
 declare void @llvm_print_f32(float)
 declare void @llvm_print_f64(double)
 declare i8* @llvm_memset(i8*, i32, i64);
+declare i8* @itoa(i64);
 
 declare i64 @next_prime(i64)
 
@@ -71,6 +73,11 @@ declare i64 @next_prime(i64)
 
 declare i8* @malloc(i64) nounwind
 declare void @free(i8*) nounwind
+
+;; 
+declare i32 @abs(i32)
+declare i64 @llabs(i64)
+
 
 ;; math.h stuff
 declare i32 @rand()
@@ -90,6 +97,7 @@ declare double @exp(double)
 declare double @fmod(double,double)
 declare double @pow(double,double)
 declare double @log(double)
+declare double @log2(double)
 declare double @log10(double)
 declare double @sqrt(double)
 declare double @fabs(double)
@@ -110,6 +118,7 @@ declare float @expf(float)
 declare float @fmodf(float,float)
 declare float @powf(float,float)
 declare float @logf(float)
+declare float @log2f(float)
 declare float @log10f(float)
 declare float @sqrtf(float)
 declare float @fabsf(float)
@@ -2114,8 +2123,8 @@ declare void @glUniformMatrix4x3fv(i32, i32, i8 zeroext, float*)
 @GL_DST_ALPHA = global i32 772
 @GL_DST_COLOR = global i32 774
 @GL_SRC_ALPHA_SATURATE = global i32 776
-@GL_FALSE = global i32 0
-@GL_TRUE = global i32 1
+@GL_FALSE = global i8 0
+@GL_TRUE = global i8 1
 @GL_CLIP_PLANE0 = global i32 12288
 @GL_CLIP_PLANE2 = global i32 12290
 @GL_CLIP_PLANE4 = global i32 12292
@@ -2557,6 +2566,8 @@ declare void @glUniformMatrix4x3fv(i32, i32, i8 zeroext, float*)
 @GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS = global i32 35660
 @GL_ACTIVE_ATTRIBUTES = global i32 35721
 @GL_FRAGMENT_SHADER = global i32 35632
+@GL_VERTEX_SHADER = global i32 35633
+@GL_GEOMETRY_SHADER = global i32 36313
 @GL_FRAGMENT_SHADER_DERIVATIVE_HINT = global i32 35723
 @GL_VERTEX_ATTRIB_ARRAY_ENABLED = global i32 34338
 @GL_VERTEX_ATTRIB_ARRAY_STRIDE = global i32 34340
@@ -2590,6 +2601,30 @@ declare void @glUniformMatrix4x3fv(i32, i32, i8 zeroext, float*)
 @GL_SLUMINANCE8 = global i32 35911
 @GL_COMPRESSED_SRGB_ALPHA = global i32 35913
 @GL_COMPRESSED_SLUMINANCE_ALPHA = global i32 35915
+
+;; added stuff
+@GL_DEPTH_TEST = global i32 2929
+@GL_LIGHTING = global i32 2896
+@GL_POSITION = global i32 4611
+@GL_DIFFUSE = global i32 4609
+@GL_PROJECTION = global i32 5889
+@GL_SHININESS = global i32 5633
+@GL_UNPACK_ROW_LENGTH = global i32 3314
+@GL_TEXTURE_MIN_FILTER = global i32 10241
+@GL_TEXTURE_WRAP_T = global i32 10243
+@GL_REPEAT = global i32 10497
+@GL_RGB = global i32 6407
+@GL_UNSIGNED_BYTE = global i32 5121
+@GL_REPLACE = global i32 7681
+@GL_LINEAR = global i32 9729
+@GL_TEXTURE_RECTANGLE_ARB = global i32 34037
+@GL_RGB16 = global i32 32852
+@GL_TEXTURE_HEIGHT = global i32 4097
+
+@GL_FRONT_AND_BACK = global i32 1032
+@GL_LINE = global i32 6913
+@GL_LIGHT_MODEL_TWO_SIDE = global i32 2898
+@GL_SMOOTH = global i32 7425
 
 
 ;; glu
